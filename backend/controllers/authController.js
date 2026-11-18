@@ -4,26 +4,35 @@ import { generateToken } from '../middlewares/auth.js';
 
 export const login = async (req, res) => {
   try {
-    const phoneNumber = String(req.body.phone_number || '').trim();
+    const loginIdentifier = String(req.body.phone_number || '').trim();
     const { password } = req.body;
 
-    if (!phoneNumber || !password) {
+    if (!loginIdentifier || !password) {
       return res.status(400).json({
         success: false,
-        message: 'Nomor telepon dan kata sandi wajib diisi.',
+        message: 'Nomor telepon/nama lengkap dan kata sandi wajib diisi.',
       });
     }
 
     const [users] = await dbPool.execute(
-      'SELECT user_id, nik, full_name, phone_number, password_hash, role FROM users WHERE phone_number = ? LIMIT 1',
-      [phoneNumber]
+      `SELECT user_id, nik, full_name, phone_number, password_hash, role
+       FROM users WHERE phone_number = ? OR full_name = ? LIMIT 2`,
+      [loginIdentifier, loginIdentifier]
     );
-    const user = users[0];
+    const user = users.find((item) => item.phone_number === loginIdentifier)
+      || (users.length === 1 ? users[0] : null);
+
+    if (!user && users.length > 1) {
+      return res.status(400).json({
+        success: false,
+        message: 'Nama lengkap digunakan beberapa akun. Silakan masuk dengan nomor telepon.',
+      });
+    }
 
     if (!user || !user.password_hash || !(await bcrypt.compare(String(password), user.password_hash))) {
       return res.status(401).json({
         success: false,
-        message: 'Nomor telepon atau kata sandi salah.',
+        message: 'Nomor telepon/nama lengkap atau kata sandi salah.',
       });
     }
 
